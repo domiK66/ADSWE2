@@ -2,6 +2,7 @@ using Context.DataBaseSettings;
 using InfluxDB.Client;
 using Serilog;
 
+namespace src.DAL.Influx;
 public class InfluxDBContext
     {
         ILogger log = Utils.Logger.ContextLog<InfluxDBContext>();

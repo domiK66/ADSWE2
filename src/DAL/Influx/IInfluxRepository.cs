@@ -1,7 +1,8 @@
 using System.Collections.Concurrent;
-using DAL.Influx.Samples;
+using src.DAL.Influx.Samples;
+using src.DAL.MongoDB;
 
-namespace DAL.InfluxDB;
+namespace src.DAL.InfluxDB;
 public interface IInfluxRepository
     {
         Task InsertOneAsync(String bucket, Sample measurement);

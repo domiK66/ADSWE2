@@ -1,6 +1,8 @@
 using Context.DataBaseSettings;
+using src.DAL.InfluxDB;
 using Microsoft.Extensions.Configuration;
 using Serilog;
+using src.DAL.Influx;
 using Utils;
 
 namespace DAL.Influx;
@@ -13,7 +15,7 @@ public class InfluxUnitOfWork {
 
         public InfluxUnitOfWork()
         {
-            var builder = new ConfigurationBuilder().SetBasePath(Constants.CurrentFolder).AddJsonFile("DataSettings/appsettings.json");
+            var builder = new ConfigurationBuilder().SetBasePath(Constants.CurrentFolder).AddJsonFile("appsettings.json");
 
             InfluxDBSettings settings = builder.Build().GetSection("InfluxDbSettings").Get<InfluxDBSettings>();
             InfluxDBContext context = new InfluxDBContext(settings);

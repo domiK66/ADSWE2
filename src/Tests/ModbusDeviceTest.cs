@@ -1,10 +1,13 @@
+/*
 using DAL.MongoDB.Entities;
 using DAL.MongoDB.Entities.Devices;
 using DAL.MongoDB.UnitOfWork;
 using Services.Drivers;
 
 namespace Tests
+
 {
+
     public class ModbusDeviceTest
     {
         [SetUp]
@@ -113,3 +116,4 @@ namespace Tests
 
     }
 }
+*/

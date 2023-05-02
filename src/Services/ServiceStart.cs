@@ -1,4 +1,4 @@
-﻿using DAL.Influx;
+﻿/* using DAL.Influx;
 using DAL.MongoDB.Entities;
 using DAL.MongoDB.Entities.Devices;
 using DAL.MongoDB.UnitOfWork;
@@ -99,3 +99,4 @@ namespace Services
         }
     }
 }
+*/

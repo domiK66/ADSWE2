@@ -1,4 +1,5 @@
 ﻿using DAL.MongoDB.Repository;
+using src.DAL.MongoDB.Repository;
 
 namespace DAL.MongoDB.UnitOfWork
 {
@@ -19,13 +20,13 @@ namespace DAL.MongoDB.UnitOfWork
             }
         }
 
-        public IDeviceRepository Devices
+        /*public IDeviceRepository Devices
         {
             get
             {
                 return new DeviceRepository(Context);
             }
-        }
+        } */
 
 
     }

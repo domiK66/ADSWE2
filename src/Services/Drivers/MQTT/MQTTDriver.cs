@@ -1,171 +1,173 @@
-﻿using DAL.Influx;
-using DAL.MongoDB.Entities;
-using DAL.MongoDB.Entities.Devices;
-using MQTTnet;
+﻿using MQTTnet;
 using MQTTnet.Client;
 using MQTTnet.Extensions.ManagedClient;
 using MQTTnet.Packets;
 using Newtonsoft.Json;
+using src.DAL.Influx.Samples;
+using src.DAL.MongoDB;
+using src.DAL.MongoDB.Entities;
 
-namespace Services.Drivers
+namespace Services.Drivers;
+
+public class MQTTDriver : Driver
 {
-    public class MQTTDriver : Driver
+    IManagedMqttClient Client;
+
+    string FinalUrl;
+    List<MQTTDataPoint> MQTTDataPoints = new();
+    private MQTTDevice Source;
+
+    public MQTTDriver(MQTTDevice src, List<MQTTDataPoint> datapoints)
+        : base(src.Name)
     {
-        IManagedMqttClient Client;
+        Source = src;
+        MQTTDataPoints = datapoints;
+    }
 
-        private MQTTDevice Source;
-        String FinalUrl;
-        List<MQTTDataPoint> MQTTDataPoints = new List<MQTTDataPoint>();
-        public MQTTDriver(MQTTDevice src, List<MQTTDataPoint> datapoints) : base(src.DeviceName)
+    public async override Task Connect()
+    {
+        FinalUrl = Source.Host + ":" + Source.Port;
+        log.Information("Created Client - trying to connect to " + FinalUrl);
+
+        var mqttFactory = new MqttFactory();
+        Client = mqttFactory.CreateManagedMqttClient();
+
+        Client.ApplicationMessageReceivedAsync += Client_ApplicationMessageReceivedAsync;
+        Client.ConnectedAsync += Client_ConnectedAsync;
+        Client.DisconnectedAsync += Client_DisconnectedAsync;
+
+        var mqttClientOptions = new MqttClientOptionsBuilder()
+            .WithTcpServer(Source.Host, Source.Port)
+            .WithClientId(Source.Name)
+            .Build();
+
+        List<MqttTopicFilter> topics = new();
+        foreach (MQTTDataPoint point in MQTTDataPoints)
         {
-            this.Source = src;
-            this.MQTTDataPoints = datapoints;
-        }
-
-        public async override Task Connect()
-        {
-            log.Information("Created Client - trying to connect to " + FinalUrl);
-
-
-            MqttFactory mqttFactory = new MqttFactory();
-            Client = mqttFactory.CreateManagedMqttClient();
-
-            Client.ApplicationMessageReceivedAsync += Client_ApplicationMessageReceivedAsync;
-            Client.ConnectedAsync += Client_ConnectedAsync;
-            Client.DisconnectedAsync += Client_DisconnectedAsync;
-
-            var mqttClientOptions = new MqttClientOptionsBuilder()
-               .WithTcpServer(Source.Host, Source.Port)
-               .WithClientId(Source.DeviceName)
-               .Build();
-
-
-            List<MqttTopicFilter> topics = new List<MqttTopicFilter>();
-            foreach (MQTTDataPoint dpi in this.MQTTDataPoints)
+            if (point.GetType() == typeof(MQTTDataPoint))
             {
-                if (dpi.GetType() == typeof(MQTTDataPoint))
+                var topicFilterAnalog = new MqttTopicFilter()
                 {
-                    MQTTDataPoint dp = (MQTTDataPoint)dpi;
-                    MqttTopicFilter topicFilterAnalog = new MqttTopicFilter { Topic = dp.TopicName, QualityOfServiceLevel = MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce };
+                    Topic = point.Topic,
+                    QualityOfServiceLevel = MQTTnet.Protocol.MqttQualityOfServiceLevel.AtLeastOnce
+                };
 
-                    log.Debug("Adding Topic " + dp.TopicName + " to subscription");
-                    topics.Add(topicFilterAnalog);
+                log.Debug("Adding Topic " + point.Topic + " to subscription");
+                topics.Add(topicFilterAnalog);
 
-                    AddDataPoint(dp.TopicName, dp);
-                }
+                AddDataPoint(point.Topic, point);
             }
-
-
-            await this.Client.SubscribeAsync(topics.ToArray());
-
-            var managedMqttClientOptions = new ManagedMqttClientOptionsBuilder()
-        .WithClientOptions(mqttClientOptions)
-        .Build();
-
-            await Client.StartAsync(managedMqttClientOptions);
-
-
-
         }
 
-        private Task Client_DisconnectedAsync(MqttClientDisconnectedEventArgs obj)
+        await Client.SubscribeAsync(topics.ToArray());
+
+        var managedMqttClientOptions = new ManagedMqttClientOptionsBuilder()
+            .WithClientOptions(mqttClientOptions)
+            .Build();
+
+        await Client.StartAsync(managedMqttClientOptions);
+    }
+
+    private Task Client_DisconnectedAsync(MqttClientDisconnectedEventArgs obj)
+    {
+        if (obj != null && obj.ConnectResult != null)
         {
-            if (obj != null && obj.ConnectResult != null)
+            log.Information(
+                "Disconnected from " + FinalUrl + ": " + obj.ConnectResult.ReasonString
+            );
+        }
+        IsConnected = false;
+
+        return Task.CompletedTask;
+    }
+
+    private Task Client_ConnectedAsync(MqttClientConnectedEventArgs arg)
+    {
+        log.Information("Connected to " + FinalUrl);
+        // obj.ConnectResult
+        IsConnected = true;
+        return Task.CompletedTask;
+    }
+
+    private Task Client_ApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs obj)
+    {
+        string message = obj.ApplicationMessage.ConvertPayloadToString();
+
+        log.Verbose("Topic " + obj.ApplicationMessage.Topic + " received " + message);
+
+        try
+        {
+            var converted = JsonConvert.DeserializeObject<MQTTItem>(message);
+
+            if (converted != null)
             {
-                log.Information("Disconnected from " + FinalUrl + ": " + obj.ConnectResult.ReasonString);
-            }
-            IsConnected = false;
+                MQTTDataPoint point = (MQTTDataPoint)GetDataPoint(obj.ApplicationMessage.Topic);
 
-            return Task.CompletedTask;
-        }
-
-        private Task Client_ConnectedAsync(MqttClientConnectedEventArgs arg)
-        {
-            log.Information("Connected to " + FinalUrl);
-            // obj.ConnectResult
-            IsConnected = true;
-            return Task.CompletedTask;
-        }
-
-        private Task Client_ApplicationMessageReceivedAsync(MqttApplicationMessageReceivedEventArgs obj)
-        {
-            String message = obj.ApplicationMessage.ConvertPayloadToString();
-
-            log.Verbose("Topic " + obj.ApplicationMessage.Topic + " received " + message);
-
-            try
-            {
-                MQTTItem converted = JsonConvert.DeserializeObject<MQTTItem>(message);
-
-                if (converted != null)
+                if (point != null)
                 {
-
-                    MQTTDataPoint dp = (MQTTDataPoint)GetDataPoint(obj.ApplicationMessage.Topic);
-
-                    if (dp != null)
+                    Sample sample = null;
+                    if (point.DataType == DataType.Float)
                     {
-                        Sample sample = null;
-                        if (dp.DataType == DataType.Float)
+                        // sample = new NumericSample();
+                        // float val = (float)(Convert.ToDouble(converted.Value) / point.Offset);
+                        // sample.Value = point;
+                        sample = new NumericSample()
                         {
-                            sample = new NumericSample();
-                            float val = (float)(Convert.ToDouble(converted.Value) / dp.Offset);
-                            sample.Value = dp;
-                        }
-                        else
-                        {
-                            sample = new BinarySample();
-                            sample.Value = converted.Value;
-                        }
+                            Value = Convert.ToSingle(
+                                Convert.ToDouble(converted.Value) / point.Offset
+                            ),
+                        };
+                    }
+                    else
+                    {
+                        sample = new BinarySample() { Value = converted.Value };
+                    }
 
-                        //https://www.epochconverter.com/
+                    //https://www.epochconverter.com/
+                    sample.Timestamp = new DateTime(
+                        1970,
+                        1,
+                        1,
+                        0,
+                        0,
+                        0,
+                        DateTimeKind.Utc
+                    ).AddSeconds(converted.TimeStamp);
+                    sample.Tag = point.Name;
 
-                        sample.TimeStamp = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc).AddSeconds(converted.TimeStamp);
-
-                        sample.Tag = dp.Name;
-
-                        if (sample.GetType() == typeof(NumericSample))
-                        {
-                            AddNumericMeasurement(dp.Name, sample as NumericSample);
-                        }
-                        else
-                        {
-                            AddBinaryMeasurement(dp.Name, sample as BinarySample);
-                        }
-
+                    if (sample.GetType() == typeof(NumericSample))
+                    {
+                        AddNumericMeasurement(point.Name, sample as NumericSample);
+                    }
+                    else
+                    {
+                        AddBinaryMeasurement(point.Name, sample as BinarySample);
                     }
                 }
-
             }
-            catch (Exception e)
-            {
-                log.Fatal("Could not convert Payload to JSON Object");
-            }
-
-            return Task.CompletedTask;
         }
-
-
-
-
-
-        public async override Task Disconnect()
+        catch (Exception ex)
         {
-            try
-            {
-
-                log.Information("Stopping Client");
-                if (Client != null)
-                {
-                    Client.StopAsync();
-                    Client.Dispose();
-                }
-            }
-            catch (Exception e)
-            {
-                log.Warning("Stopping failed " + e.ToString());
-            }
+            log.Fatal("Could not convert Payload to JSON Object " + ex.Message);
         }
 
+        return Task.CompletedTask;
+    }
 
+    public async override Task Disconnect()
+    {
+        try
+        {
+            log.Information("Stopping Client");
+            if (Client != null)
+            {
+                await Client.StopAsync();
+                Client.Dispose();
+            }
+        }
+        catch (Exception ex)
+        {
+            log.Warning("Stopping failed " + ex.Message);
+        }
     }
 }

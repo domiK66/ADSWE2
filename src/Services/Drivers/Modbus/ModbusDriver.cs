@@ -1,10 +1,10 @@
-﻿using DAL.Influx;
-using DAL.MongoDB.Entities;
-using DAL.MongoDB.Entities.Devices;
+﻿using src.DAL.Influx.Samples;
 using Modbus.Device;
 using Modbus.Utility;
+using src.DAL.MongoDB;
+using src.DAL.MongoDB.Entities;
 using System.Net.Sockets;
-using ModbusDevice = DAL.MongoDB.Entities.Devices.ModbusDevice;
+using ModbusDevice = src.DAL.MongoDB.Entities.ModbusDevice;
 
 namespace Services.Drivers
 {
@@ -13,21 +13,18 @@ namespace Services.Drivers
         TcpClient Client;
         ModbusIpMaster Master;
 
-
-
         private ModbusDevice Source;
         String FinalUrl;
         List<ModbusDataPoint> ModbusDataPoints = new List<ModbusDataPoint>();
 
         System.Timers.Timer FetchTimer = new System.Timers.Timer();
 
-
-        public ModbusDriver(ModbusDevice src, List<ModbusDataPoint> datapoints) : base(src.DeviceName)
+        public ModbusDriver(ModbusDevice src, List<ModbusDataPoint> datapoints)
+            : base(src.Name)
         {
             this.Source = src;
             ModbusDataPoints = datapoints;
         }
-
 
         public async override Task Connect()
         {
@@ -43,7 +40,6 @@ namespace Services.Drivers
                 FetchTimer.Elapsed += FetchTimer_Elapsed;
 
                 await Read();
-
             }
             catch (Exception ex)
             {
@@ -51,12 +47,10 @@ namespace Services.Drivers
             }
             IsConnected = Client.Connected;
 
-
             foreach (ModbusDataPoint dpi in ModbusDataPoints)
             {
                 AddDataPoint(dpi.Name, dpi);
             }
-
         }
 
         private async void FetchTimer_Elapsed(object? sender, System.Timers.ElapsedEventArgs e)
@@ -68,7 +62,6 @@ namespace Services.Drivers
         {
             try
             {
-
                 log.Information("Stopping Client");
                 if (Client != null)
                 {
@@ -89,19 +82,16 @@ namespace Services.Drivers
 
         public async Task Read()
         {
-
             if (IsConnected)
             {
                 foreach (ModbusDataPoint pt in ModbusDataPoints)
                 {
-
                     if (pt.RegisterCount > 0 && pt.Register >= 0)
                     {
                         Sample mn = await GetModbusVal(pt);
 
                         if (mn != null)
                         {
-
                             if (mn.GetType() == typeof(NumericSample))
                             {
                                 AddNumericMeasurement(pt.Name, mn as NumericSample);
@@ -110,7 +100,6 @@ namespace Services.Drivers
                             {
                                 AddBinaryMeasurement(pt.Name, mn as BinarySample);
                             }
-
 
                             log.Debug($"Got {mn.Value} from {pt.Name} ");
                         }
@@ -123,14 +112,12 @@ namespace Services.Drivers
             }
         }
 
-
         private NumericSample DecodeNumeric(ushort[] register, ModbusDataPoint pt)
         {
             NumericSample sample = new NumericSample();
 
             if (pt.DataType == DataType.Float)
             {
-
                 if (register.Count() > 1)
                 {
                     if (register.Count() == 2)
@@ -146,13 +133,16 @@ namespace Services.Drivers
 
                         sample.Value = ModbusUtility.GetSingle(register0, register1);
 
-
-                        log.Verbose($"Reading {this.Name} Quantity 2 - Address {pt.Register}/{pt.RegisterCount} returned {sample.Value}");
+                        log.Verbose(
+                            $"Reading {this.Name} Quantity 2 - Address {pt.Register}/{pt.RegisterCount} returned {sample.Value}"
+                        );
                     }
                     else
                     {
                         sample.Value = 0;
-                        log.Verbose($"Reading {this.Name} Quantity 2 - Address {pt.Register}/{pt.RegisterCount} Not found");
+                        log.Verbose(
+                            $"Reading {this.Name} Quantity 2 - Address {pt.Register}/{pt.RegisterCount} Not found"
+                        );
                     }
                 }
                 else if (register.Count() == 1)
@@ -165,7 +155,6 @@ namespace Services.Drivers
                     sample.Value = 0;
                 }
 
-
                 if (pt.Offset > 0)
                 {
                     sample.Value = Convert.ToDouble(sample.Value) / pt.Offset;
@@ -173,13 +162,11 @@ namespace Services.Drivers
             }
 
             return sample;
-
         }
 
         private async Task<Sample> GetModbusVal(ModbusDataPoint pt)
         {
             Sample sample = null;
-
 
             ushort start = Convert.ToUInt16(pt.Register);
             ushort offset = Convert.ToUInt16(pt.RegisterCount);
@@ -196,11 +183,16 @@ namespace Services.Drivers
                     }
                     else
                     {
-                        log.Warning("Modbus Point " + pt.Name + " could not be found: Register : " + start + " Offset: " + offset);
+                        log.Warning(
+                            "Modbus Point "
+                                + pt.Name
+                                + " could not be found: Register : "
+                                + start
+                                + " Offset: "
+                                + offset
+                        );
                         sample.Value = false;
                     }
-
-
                 }
                 else if (pt.RegisterType == RegisterType.InputStatus)
                 {
@@ -213,10 +205,16 @@ namespace Services.Drivers
                     }
                     else
                     {
-                        log.Warning("Modbus Point " + pt.Name + " could not be found: Register : " + start + " Offset: " + offset);
+                        log.Warning(
+                            "Modbus Point "
+                                + pt.Name
+                                + " could not be found: Register : "
+                                + start
+                                + " Offset: "
+                                + offset
+                        );
                         sample.Value = false;
                     }
-
                 }
                 else if (pt.RegisterType == RegisterType.InputRegister)
                 {
@@ -225,21 +223,13 @@ namespace Services.Drivers
                     ushort[] register = await Master.ReadInputRegistersAsync(start, offset);
 
                     sample = DecodeNumeric(register, pt);
-
-
                 }
                 else if (pt.RegisterType == RegisterType.HoldingRegister)
                 {
-
-
                     ushort[] register = await Master.ReadHoldingRegistersAsync(start, offset);
                     sample = new NumericSample();
                     sample = DecodeNumeric(register, pt);
-
-
                 }
-
-
             }
             catch (Exception e)
             {
@@ -247,12 +237,7 @@ namespace Services.Drivers
                 sample = null;
             }
 
-
             return sample;
         }
-
-
-
-
     }
 }

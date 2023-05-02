@@ -1,4 +1,4 @@
-namespace DAL.Influx.Samples
+namespace src.DAL.Influx.Samples
 {
     public class NumericSample: Sample {
         public override Boolean AsBoolean(){

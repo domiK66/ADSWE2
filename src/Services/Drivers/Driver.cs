@@ -1,6 +1,8 @@
 ﻿using DAL.Influx;
 using DAL.MongoDB.Entities;
 using Serilog;
+using src.DAL.Influx.Samples;
+using src.DAL.MongoDB;
 using System.Collections.Concurrent;
 using Utils;
 
@@ -10,7 +12,11 @@ namespace Services.Drivers
     {
         protected ILogger log = Logger.ContextLog<Driver>();
 
-        public ConcurrentDictionary<String, ConcurrentBag<Sample>> Measurements { get; protected set; } = new ConcurrentDictionary<String, ConcurrentBag<Sample>>();
+        public ConcurrentDictionary<String, ConcurrentBag<Sample>> Measurements
+        {
+            get;
+            protected set;
+        } = new ConcurrentDictionary<String, ConcurrentBag<Sample>>();
         protected Dictionary<String, DataPoint> DataPoints = new Dictionary<String, DataPoint>();
 
         public String Name { get; set; }
@@ -20,12 +26,10 @@ namespace Services.Drivers
             this.Name = name;
         }
 
-
         public Boolean IsConnected { get; protected set; }
 
         public abstract Task Connect();
         public abstract Task Disconnect();
-
 
         public void AddNumericMeasurement(String datapoint, NumericSample measurement)
         {
@@ -46,7 +50,6 @@ namespace Services.Drivers
 
             Measurements[datapoint].Add(measurement);
         }
-
 
         public void AddDataPoint(String name, DataPoint pt)
         {

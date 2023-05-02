@@ -1,4 +1,4 @@
-namespace DAL.Influx.Samples
+namespace src.DAL.Influx.Samples
 {
     public abstract class Sample {
         public String Tag {get; set;}
@@ -7,6 +7,11 @@ namespace DAL.Influx.Samples
 
         public abstract Boolean AsBoolean();
         public abstract Double AsNumeric();
+
+        internal byte AsFloat()
+        {
+            throw new NotImplementedException();
+        }
     }
 }
 
